@@ -119,7 +119,7 @@
 #include <fstream>
 
 #define COM_NO_WINDOWS_H
-#include <wine/windows/dxgiformat.h>
+#include <dxgiformat.h>
 
 #define strncpy_s(x1, x2, x3) strncpy(x1, x2, x3)
 #define sscanf_s(x1, x2, ...) sscanf(x1,x2, __VA_ARGS__)
@@ -139,10 +139,10 @@ typedef struct _GUID {
    static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
 
 #define LARGE_INTEGER long long
-#include <wine/windows/winerror.h>
+#include <winerror.h>
 
-// #include <wine/windows/d3d12.h>
-// #include <wine/windows/d3d11_4.h>
+// #include <d3d12.h>
+// #include <d3d11_4.h>
 #else
 #include <d3d11_1.h>
 #endif

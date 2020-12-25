@@ -26,7 +26,7 @@
 #elif defined(__linux__)
 
 #define COM_NO_WINDOWS_H
-#include <wine/windows/dxgiformat.h>
+#include <dxgiformat.h>
 
 typedef void VOID, *HANDLE, *RPC_IF_HANDLE, *LPVOID;
 typedef int16_t WORD;
@@ -72,7 +72,7 @@ static void *bsearch_s(const void *key, const void *base, size_t nmemb,
 
 #define _countof(array) (sizeof(array) / sizeof(array[0]))
 
-// #include <wine/windows/d3d11_1.h>
+// #include <d3d11_1.h>
 #else
 #include <d3d11_1.h>
 #endif

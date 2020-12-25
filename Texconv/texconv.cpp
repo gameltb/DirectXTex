@@ -41,7 +41,7 @@
 #include <cstring>
 #include <filesystem>
 
-#include <wine/windows/winerror.h>
+#include <winerror.h>
 
 #define MAX_PATH        260
 typedef wchar_t        WCHAR;
