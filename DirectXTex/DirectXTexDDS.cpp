@@ -1575,6 +1575,7 @@ HRESULT DirectX::GetMetadataFromDDSFile(
     if (!szFile)
         return E_INVALIDARG;
 
+#ifdef _WIN32
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
     ScopedHandle hFile(safe_handle(CreateFile2(szFile, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, nullptr)));
 #else
@@ -1604,16 +1605,24 @@ HRESULT DirectX::GetMetadataFromDDSFile(
     {
         return E_FAIL;
     }
+#else
+
+#endif
 
     // Read the header in (including extended header if present)
     const size_t MAX_HEADER_SIZE = sizeof(uint32_t) + sizeof(DDS_HEADER) + sizeof(DDS_HEADER_DXT10);
     uint8_t header[MAX_HEADER_SIZE] = {};
 
     DWORD bytesRead = 0;
+
+#ifdef _WIN32
     if (!ReadFile(hFile.get(), header, MAX_HEADER_SIZE, &bytesRead, nullptr))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
+#else
+
+#endif
 
     uint32_t convFlags = 0;
     return DecodeDDSHeader(header, bytesRead, flags, metadata, convFlags);
@@ -1708,6 +1717,7 @@ HRESULT DirectX::LoadFromDDSFile(
 
     image.Release();
 
+#ifdef _WIN32
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
     ScopedHandle hFile(safe_handle(CreateFile2(szFile, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, nullptr)));
 #else
@@ -1738,16 +1748,47 @@ HRESULT DirectX::LoadFromDDSFile(
     {
         return E_FAIL;
     }
+#else
+    std::filesystem::path path(szFile);
+    std::ifstream hFile(path, std::ios::in|std::ios::binary);
+
+    if (!hFile.is_open())
+    {
+        return E_FAIL;
+    }
+
+    auto size = std::filesystem::file_size(path);
+
+    // File is too big for 32-bit allocation, so reject read (4 GB should be plenty large enough for a valid DDS file)
+    if ((size & 0xffffffff00000000) > 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+
+    // Need at least enough data to fill the standard header and magic number to be a valid DDS
+    if (size < (sizeof(DDS_HEADER) + sizeof(uint32_t)))
+    {
+        return E_FAIL;
+    }
+#endif
 
     // Read the header in (including extended header if present)
     const size_t MAX_HEADER_SIZE = sizeof(uint32_t) + sizeof(DDS_HEADER) + sizeof(DDS_HEADER_DXT10);
     uint8_t header[MAX_HEADER_SIZE] = {};
 
     DWORD bytesRead = 0;
+#ifdef _WIN32
     if (!ReadFile(hFile.get(), header, MAX_HEADER_SIZE, &bytesRead, nullptr))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
+#else
+    hFile.read(reinterpret_cast<char *>(header), MAX_HEADER_SIZE);
+    bytesRead = hFile.gcount();
+    if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+        return E_FAIL;
+    }
+#endif
 
     uint32_t convFlags = 0;
     TexMetadata mdata;
@@ -1761,10 +1802,17 @@ HRESULT DirectX::LoadFromDDSFile(
     {
         // Must reset file position since we read more than the standard header above
         LARGE_INTEGER filePos = { { sizeof(uint32_t) + sizeof(DDS_HEADER), 0 } };
+    #ifdef _WIN32
         if (!SetFilePointerEx(hFile.get(), filePos, nullptr, FILE_BEGIN))
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
+    #else
+        hFile.seekg(filePos,std::ios::beg);
+        if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+            return E_FAIL;
+        }
+    #endif
 
         offset = sizeof(uint32_t) + sizeof(DDS_HEADER);
     }
@@ -1778,10 +1826,18 @@ HRESULT DirectX::LoadFromDDSFile(
             return E_OUTOFMEMORY;
         }
 
+    #ifdef _WIN32
         if (!ReadFile(hFile.get(), pal8.get(), 256 * sizeof(uint32_t), &bytesRead, nullptr))
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
+    #else
+        hFile.read(reinterpret_cast<char *>(pal8.get()), 256 * sizeof(uint32_t));
+        bytesRead = hFile.gcount();
+        if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+            return E_FAIL;
+        }
+    #endif
 
         if (bytesRead != (256 * sizeof(uint32_t)))
         {
@@ -1791,7 +1847,11 @@ HRESULT DirectX::LoadFromDDSFile(
         offset += (256 * sizeof(uint32_t));
     }
 
+    #ifdef _WIN32
     DWORD remaining = fileInfo.EndOfFile.LowPart - offset;
+    #else
+    DWORD remaining = size - offset;
+    #endif
     if (remaining == 0)
         return E_FAIL;
 
@@ -1808,11 +1868,20 @@ HRESULT DirectX::LoadFromDDSFile(
             return E_OUTOFMEMORY;
         }
 
+    #ifdef _WIN32
         if (!ReadFile(hFile.get(), temp.get(), remaining, &bytesRead, nullptr))
         {
             image.Release();
             return HRESULT_FROM_WIN32(GetLastError());
         }
+    #else
+        hFile.read(reinterpret_cast<char *>(temp.get()), remaining);
+        bytesRead = hFile.gcount();
+        if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+            image.Release();
+            return E_FAIL;
+        }
+    #endif
 
         if (bytesRead != remaining)
         {
@@ -1857,11 +1926,20 @@ HRESULT DirectX::LoadFromDDSFile(
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
+    #ifdef _WIN32
         if (!ReadFile(hFile.get(), image.GetPixels(), static_cast<DWORD>(image.GetPixelsSize()), &bytesRead, nullptr))
         {
             image.Release();
             return HRESULT_FROM_WIN32(GetLastError());
         }
+    #else
+        hFile.read(reinterpret_cast<char *>(image.GetPixels()), static_cast<DWORD>(image.GetPixelsSize()));
+        bytesRead = hFile.gcount();
+        if ((hFile.rdstate() & std::ifstream::failbit ) != 0){
+            image.Release();
+            return E_FAIL;
+        }
+    #endif
 
         if (convFlags & (CONV_FLAGS_SWIZZLE | CONV_FLAGS_NOALPHA))
         {
@@ -2132,6 +2210,7 @@ HRESULT DirectX::SaveToDDSFile(
     if (FAILED(hr))
         return hr;
 
+#ifdef _WIN32
     // Create file and write header
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
     ScopedHandle hFile(safe_handle(CreateFile2(szFile, GENERIC_WRITE | DELETE, 0, CREATE_ALWAYS, nullptr)));
@@ -2150,6 +2229,20 @@ HRESULT DirectX::SaveToDDSFile(
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
+#else
+    std::filesystem::path path(szFile);
+    std::ofstream hFile(path, std::ios::out|std::ios::binary);
+
+    if (!hFile.is_open())
+    {
+        return E_FAIL;
+    }
+    hFile.write(reinterpret_cast<const char *>(header), static_cast<DWORD>(required));
+    DWORD bytesWritten = required;
+    if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+        return E_FAIL;
+    }
+#endif
 
     if (bytesWritten != required)
     {
@@ -2183,10 +2276,18 @@ HRESULT DirectX::SaveToDDSFile(
 
                 if ((images[index].slicePitch == ddsSlicePitch) && (ddsSlicePitch <= UINT32_MAX))
                 {
+                    #ifdef _WIN32
                     if (!WriteFile(hFile.get(), images[index].pixels, static_cast<DWORD>(ddsSlicePitch), &bytesWritten, nullptr))
                     {
                         return HRESULT_FROM_WIN32(GetLastError());
                     }
+                    #else
+                    hFile.write(reinterpret_cast<const char *>(images[index].pixels), static_cast<DWORD>(ddsSlicePitch));
+                    bytesWritten = ddsSlicePitch;
+                    if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+                        return E_FAIL;
+                    }
+                    #endif
 
                     if (bytesWritten != ddsSlicePitch)
                     {
@@ -2210,10 +2311,18 @@ HRESULT DirectX::SaveToDDSFile(
                     size_t lines = ComputeScanlines(metadata.format, images[index].height);
                     for (size_t j = 0; j < lines; ++j)
                     {
+                        #ifdef _WIN32
                         if (!WriteFile(hFile.get(), sPtr, static_cast<DWORD>(ddsRowPitch), &bytesWritten, nullptr))
                         {
                             return HRESULT_FROM_WIN32(GetLastError());
                         }
+                        #else
+                        hFile.write(reinterpret_cast<const char *>(sPtr), static_cast<DWORD>(ddsRowPitch));
+                        bytesWritten = ddsRowPitch;
+                        if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+                            return E_FAIL;
+                        }
+                        #endif
 
                         if (bytesWritten != ddsRowPitch)
                         {
@@ -2256,10 +2365,18 @@ HRESULT DirectX::SaveToDDSFile(
 
                 if ((images[index].slicePitch == ddsSlicePitch) && (ddsSlicePitch <= UINT32_MAX))
                 {
+                    #ifdef _WIN32
                     if (!WriteFile(hFile.get(), images[index].pixels, static_cast<DWORD>(ddsSlicePitch), &bytesWritten, nullptr))
                     {
                         return HRESULT_FROM_WIN32(GetLastError());
                     }
+                    #else
+                    hFile.write(reinterpret_cast<const char *>(images[index].pixels), static_cast<DWORD>(ddsSlicePitch));
+                    bytesWritten = ddsSlicePitch;
+                    if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+                        return E_FAIL;
+                    }
+                    #endif
 
                     if (bytesWritten != ddsSlicePitch)
                     {
@@ -2283,10 +2400,18 @@ HRESULT DirectX::SaveToDDSFile(
                     size_t lines = ComputeScanlines(metadata.format, images[index].height);
                     for (size_t j = 0; j < lines; ++j)
                     {
+                        #ifdef _WIN32
                         if (!WriteFile(hFile.get(), sPtr, static_cast<DWORD>(ddsRowPitch), &bytesWritten, nullptr))
                         {
                             return HRESULT_FROM_WIN32(GetLastError());
                         }
+                        #else
+                        hFile.write(reinterpret_cast<const char *>(sPtr), static_cast<DWORD>(ddsRowPitch));
+                        bytesWritten = ddsRowPitch;
+                        if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+                            return E_FAIL;
+                        }
+                        #endif
 
                         if (bytesWritten != ddsRowPitch)
                         {
@@ -2308,7 +2433,9 @@ HRESULT DirectX::SaveToDDSFile(
         return E_FAIL;
     }
 
+#ifdef _WIN32
     delonfail.clear();
+#endif
 
     return S_OK;
 }

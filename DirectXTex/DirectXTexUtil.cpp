@@ -28,6 +28,7 @@ static_assert(WIN10_DXGI_FORMAT_V408 == DXGI_FORMAT_V408, "Windows SDK mismatch 
 #endif
 
 using namespace DirectX;
+#ifdef _WIN32
 using Microsoft::WRL::ComPtr;
 
 namespace
@@ -317,6 +318,7 @@ void DirectX::SetWICFactory(_In_opt_ IWICImagingFactory* pWIC) noexcept
     if (pWIC)
         pWIC->Release();
 }
+#endif
 
 
 

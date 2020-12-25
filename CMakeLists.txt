@@ -5,6 +5,11 @@ cmake_minimum_required (VERSION 3.11)
 
 set(DIRECTXTEX_VERSION 1.9.1)
 
+SET(CMAKE_C_COMPILER /usr/bin/clang)
+SET(CMAKE_CXX_COMPILER /usr/bin/clang++)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+SET(CMAKE_BUILD_TYPE "Debug")
+
 project (DirectXTex
   VERSION ${DIRECTXTEX_VERSION}
   DESCRIPTION "DirectX Texture Library"
@@ -28,7 +33,7 @@ option(ENABLE_CODE_ANALYSIS "Use Static Code Analysis on build" OFF)
 # NOTE requires adding DirectXTexEXR.h/.cpp source files (vcpkg does this automatically)
 option(ENABLE_OPENEXR_SUPPORT "Build with OpenEXR support" OFF)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -52,32 +57,36 @@ set(LIBRARY_SOURCES
     DirectXTex/BC.cpp
     DirectXTex/BC4BC5.cpp
     DirectXTex/BC6HBC7.cpp
-    DirectXTex/BCDirectCompute.cpp
     DirectXTex/DirectXTexCompress.cpp
-    DirectXTex/DirectXTexCompressGPU.cpp
     DirectXTex/DirectXTexConvert.cpp
     DirectXTex/DirectXTexDDS.cpp
-    DirectXTex/DirectXTexFlipRotate.cpp
-    DirectXTex/DirectXTexHDR.cpp
+    # DirectXTex/DirectXTexHDR.cpp
     DirectXTex/DirectXTexImage.cpp
     DirectXTex/DirectXTexMipmaps.cpp
     DirectXTex/DirectXTexMisc.cpp
     DirectXTex/DirectXTexNormalMaps.cpp
     DirectXTex/DirectXTexPMAlpha.cpp
     DirectXTex/DirectXTexResize.cpp
-    DirectXTex/DirectXTexTGA.cpp
-    DirectXTex/DirectXTexUtil.cpp
-    DirectXTex/DirectXTexWIC.cpp)
+    # DirectXTex/DirectXTexTGA.cpp
+    DirectXTex/DirectXTexUtil.cpp)
 
 set(SHADER_SOURCES
     DirectXTex/Shaders/BC6HEncode.hlsl
     DirectXTex/Shaders/BC7Encode.hlsl)
 
-if(BUILD_DX11)
-   set(LIBRARY_SOURCES ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} DirectXTex/DirectXTexD3D11.cpp)
-endif()
-if(BUILD_DX12)
-   set(LIBRARY_SOURCES ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} DirectXTex/DirectXTexD3D12.cpp)
+if(WIN32)
+    set(LIBRARY_SOURCES ${LIBRARY_SOURCES}
+            DirectXTex/BCDirectCompute.cpp
+            DirectXTex/DirectXTexCompressGPU.cpp
+            DirectXTex/DirectXTexFlipRotate.cpp
+            DirectXTex/DirectXTexWIC.cpp)
+
+    if(BUILD_DX11)
+        set(LIBRARY_SOURCES ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} DirectXTex/DirectXTexD3D11.cpp)
+    endif()
+    if(BUILD_DX12)
+        set(LIBRARY_SOURCES ${LIBRARY_SOURCES} ${LIBRARY_HEADERS} DirectXTex/DirectXTexD3D12.cpp)
+    endif ()
 endif()
 
 if(ENABLE_OPENEXR_SUPPORT)
@@ -89,21 +98,27 @@ if(ENABLE_OPENEXR_SUPPORT)
        DirectXTex/DirectXTexEXR.cpp)
 endif()
 
-add_library(${PROJECT_NAME} STATIC ${LIBRARY_SOURCES} DirectXTex/Shaders/Compiled/BC6HEncode_EncodeBlockCS.inc)
+if(WIN32)
+  add_library(${PROJECT_NAME} STATIC ${LIBRARY_SOURCES} DirectXTex/Shaders/Compiled/BC6HEncode_EncodeBlockCS.inc)
 
-add_custom_command(
-    OUTPUT "${PROJECT_SOURCE_DIR}/DirectXTex/Shaders/Compiled/BC6HEncode_EncodeBlockCS.inc"
-    MAIN_DEPENDENCY "${PROJECT_SOURCE_DIR}/DirectXTex/Shaders/CompileShaders.cmd"
-    DEPENDS ${SHADER_SOURCES}
-    COMMENT "Generating HLSL shaders..."
-    COMMAND "CompileShaders.cmd"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/DirectXTex/Shaders"
-    USES_TERMINAL)
+  add_custom_command(
+      OUTPUT "${PROJECT_SOURCE_DIR}/DirectXTex/Shaders/Compiled/BC6HEncode_EncodeBlockCS.inc"
+      MAIN_DEPENDENCY "${PROJECT_SOURCE_DIR}/DirectXTex/Shaders/CompileShaders.cmd"
+      DEPENDS ${SHADER_SOURCES}
+      COMMENT "Generating HLSL shaders..."
+      COMMAND "CompileShaders.cmd"
+      WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/DirectXTex/Shaders"
+      USES_TERMINAL)
+else()
+  include_directories(include)
+  add_library(${PROJECT_NAME} STATIC ${LIBRARY_SOURCES})
+endif()
 
 source_group(${PROJECT_NAME} REGULAR_EXPRESSION DirectXTex/*.*)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/DirectXTex>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/DirectXMath/Inc>
   $<INSTALL_INTERFACE:include>)
 
 if(ENABLE_OPENEXR_SUPPORT)
@@ -161,21 +176,28 @@ install(
 
 #--- Command-line tools
 if(BUILD_TOOLS)
+  if(WIN32)
+    set(VERSIONLIB version.lib)
+  else()
+    set(VERSIONLIB )
+  endif()
+
   add_executable(texassemble
     Texassemble/texassemble.cpp
     Texassemble/AnimatedGif.cpp)
-  target_link_libraries(texassemble ${PROJECT_NAME} version.lib)
+  target_link_libraries(texassemble ${PROJECT_NAME} ${VERSIONLIB})
   source_group(texassemble REGULAR_EXPRESSION Texassemble/*.*)
 
   add_executable(texconv
     Texconv/texconv.cpp
-    Texconv/ExtendedBMP.cpp
-    Texconv/PortablePixMap.cpp)
-  target_link_libraries(texconv ${PROJECT_NAME} version.lib)
+    # Texconv/ExtendedBMP.cpp
+    # Texconv/PortablePixMap.cpp
+    )
+  target_link_libraries(texconv ${PROJECT_NAME} ${VERSIONLIB})
   source_group(texconv REGULAR_EXPRESSION Texconv/*.*)
 
   add_executable(texdiag Texdiag/texdiag.cpp)
-  target_link_libraries(texdiag ${PROJECT_NAME} version.lib)
+  target_link_libraries(texdiag ${PROJECT_NAME} ${VERSIONLIB})
   source_group(texdiag REGULAR_EXPRESSION Texdiag/*.*)
 
   if(ENABLE_OPENEXR_SUPPORT)
@@ -210,6 +232,8 @@ endif()
 if ( CMAKE_CXX_COMPILER_ID MATCHES "Clang" )
     set(WarningsLib "-Wpedantic" "-Wextra")
     target_compile_options(${PROJECT_NAME} PRIVATE ${WarningsLib})
+
+    target_compile_options(${PROJECT_NAME} PRIVATE "-fdeclspec")
 
     # OpenMP is not supported for clang for Windows by default
 

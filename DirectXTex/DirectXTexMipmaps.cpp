@@ -14,7 +14,9 @@
 #include "filters.h"
 
 using namespace DirectX;
+#ifdef _WIN32
 using Microsoft::WRL::ComPtr;
+#endif
 
 namespace
 {
@@ -65,6 +67,7 @@ namespace
     }
 
 
+#ifdef _WIN32
     HRESULT EnsureWicBitmapPixelFormat(
         _In_ IWICImagingFactory* pWIC,
         _In_ IWICBitmap* src,
@@ -116,6 +119,7 @@ namespace
 
         return hr;
     }
+#endif
 
 
 #if DIRECTX_MATH_VERSION >= 310
@@ -349,9 +353,11 @@ namespace DirectX
     bool _CalculateMipLevels3D(_In_ size_t width, _In_ size_t height, _In_ size_t depth, _Inout_ size_t& mipLevels) noexcept;
         // Also used by Compress
 
+#ifdef _WIN32
     HRESULT _ResizeSeparateColorAndAlpha(_In_ IWICImagingFactory* pWIC, _In_ bool iswic2, _In_ IWICBitmap* original,
         _In_ size_t newWidth, _In_ size_t newHeight, _In_ TEX_FILTER_FLAGS filter, _Inout_ const Image* img) noexcept;
         // Also used by Resize
+#endif
 
     bool _CalculateMipLevels(_In_ size_t width, _In_ size_t height, _Inout_ size_t& mipLevels) noexcept
     {
@@ -391,6 +397,7 @@ namespace DirectX
         return true;
     }
 
+#ifdef _WIN32
     //--- Resizing color and alpha channels separately using WIC ---
     _Use_decl_annotations_
     HRESULT _ResizeSeparateColorAndAlpha(
@@ -607,6 +614,7 @@ namespace DirectX
 
         return hr;
     }
+#endif
 }
 
 namespace
@@ -682,6 +690,7 @@ namespace
     }
 
 
+#ifdef _WIN32
     //--- mipmap (1D/2D) generation using WIC image scalar ---
     HRESULT GenerateMipMapsUsingWIC(
         _In_ const Image& baseImage,
@@ -822,6 +831,7 @@ namespace
 
         return S_OK;
     }
+#endif
 
 
     //-------------------------------------------------------------------------------------
@@ -2797,6 +2807,7 @@ HRESULT DirectX::GenerateMipMaps(
 
     static_assert(TEX_FILTER_POINT == 0x100000, "TEX_FILTER_ flag values don't match TEX_FILTER_MODE_MASK");
 
+    #ifdef _WIN32
     bool usewic = UseWICFiltering(baseImage.format, filter);
 
     WICPixelFormatGUID pfGUID = {};
@@ -2875,6 +2886,7 @@ HRESULT DirectX::GenerateMipMaps(
         }
     }
     else
+    #endif
     {
         //--- Use custom filters to generate mipmaps ----------------------------------
         TexMetadata mdata = {};
@@ -3010,6 +3022,7 @@ HRESULT DirectX::GenerateMipMaps(
 
     static_assert(TEX_FILTER_POINT == 0x100000, "TEX_FILTER_ flag values don't match TEX_FILTER_MODE_MASK");
 
+    #ifdef _WIN32
     bool usewic = !metadata.IsPMAlpha() && UseWICFiltering(metadata.format, filter);
 
     WICPixelFormatGUID pfGUID = {};
@@ -3101,6 +3114,7 @@ HRESULT DirectX::GenerateMipMaps(
         }
     }
     else
+    #endif
     {
         //--- Use custom filters to generate mipmaps ----------------------------------
         TexMetadata mdata2 = metadata;

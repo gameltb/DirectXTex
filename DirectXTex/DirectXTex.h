@@ -23,6 +23,56 @@
 #include <d3d12_x.h>
 #elif defined(_XBOX_ONE) && defined(_TITLE)
 #include <d3d11_x.h>
+#elif defined(__linux__)
+
+#define COM_NO_WINDOWS_H
+#include <wine/windows/dxgiformat.h>
+
+typedef void VOID, *HANDLE, *RPC_IF_HANDLE, *LPVOID;
+typedef int16_t WORD;
+typedef int32_t INT32, INT, LONG;
+typedef uint32_t UINT32, UINT, ULONG, DWORD, BOOL;
+#define TRUE 1u
+#define FALSE 0u
+
+typedef LONG HRESULT;
+
+#define _aligned_malloc(x1, x2) std::aligned_alloc(x2, x1)
+
+static int memcpy_s(void *dest, size_t destsz, const void *src, size_t count) {
+  if (count > destsz) {
+    return 1;
+  }
+  std::memcpy(dest, src, std::min(destsz, count));
+  return 0;
+}
+
+static void *bsearch_s(const void *key, const void *base, size_t nmemb,
+                       size_t size,
+                       int (*compar)(void *k, const void *key, const void *val),
+                       void *context) {
+  errno = 0;
+
+  while (nmemb > 0) {
+    void *ptry = (char *)base + size * (nmemb / 2);
+    int sign = compar(context, key, ptry);
+    if (!sign)
+      return ptry;
+    else if (nmemb == 1)
+      break;
+    else if (sign < 0) {
+      nmemb /= 2;
+    } else {
+      base = ptry;
+      nmemb -= nmemb / 2;
+    }
+  }
+  return NULL;
+}
+
+#define _countof(array) (sizeof(array) / sizeof(array[0]))
+
+// #include <wine/windows/d3d11_1.h>
 #else
 #include <d3d11_1.h>
 #endif
@@ -30,7 +80,9 @@
 
 #include <DirectXMath.h>
 
+#ifdef _WIN32
 #include <OCIdl.h>
+#endif
 
 #define DIRECTX_TEX_VERSION 191
 
@@ -284,6 +336,7 @@ namespace DirectX
         _In_ TGA_FLAGS flags,
         _Out_ TexMetadata& metadata) noexcept;
 
+    #ifdef _WIN32
     HRESULT __cdecl GetMetadataFromWICMemory(
         _In_reads_bytes_(size) const void* pSource, _In_ size_t size,
         _In_ WIC_FLAGS flags,
@@ -295,6 +348,7 @@ namespace DirectX
         _In_ WIC_FLAGS flags,
         _Out_ TexMetadata& metadata,
         _In_opt_ std::function<void __cdecl(IWICMetadataQueryReader*)> getMQR = nullptr);
+    #endif
 
     // Compatability helpers
     HRESULT __cdecl GetMetadataFromTGAMemory(
@@ -448,6 +502,7 @@ namespace DirectX
         _In_ TGA_FLAGS flags,
         _In_z_ const wchar_t* szFile, _In_opt_ const TexMetadata* metadata = nullptr) noexcept;
 
+    #ifdef _WIN32
     // WIC operations
     HRESULT __cdecl LoadFromWICMemory(
         _In_reads_bytes_(size) const void* pSource, _In_ size_t size,
@@ -478,6 +533,7 @@ namespace DirectX
         _In_ WIC_FLAGS flags, _In_ REFGUID guidContainerFormat,
         _In_z_ const wchar_t* szFile, _In_opt_ const GUID* targetFormat = nullptr,
         _In_opt_ std::function<void __cdecl(IPropertyBag2*)> setCustomProps = nullptr);
+    #endif
 
     // Compatability helpers
     HRESULT __cdecl LoadFromTGAMemory(
@@ -799,7 +855,9 @@ namespace DirectX
         WIC_CODEC_ICO,              // Windows Icon (.ico)
     };
 
+    #ifdef _WIN32
     REFGUID __cdecl GetWICCodec(_In_ WICCodecs codec) noexcept;
+    #endif
 
     IWICImagingFactory* __cdecl GetWICFactory(bool& iswic2) noexcept;
     void __cdecl SetWICFactory(_In_opt_ IWICImagingFactory* pWIC) noexcept;

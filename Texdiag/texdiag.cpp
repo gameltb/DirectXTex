@@ -29,7 +29,35 @@
 #include <list>
 #include <vector>
 
+#ifdef _WIN32
 #include <dxgiformat.h>
+#endif
+
+#if defined (__linux__)
+#include <cstring>
+#include <filesystem>
+
+#include <wine/windows/winerror.h>
+
+#define MAX_PATH        260
+typedef wchar_t        WCHAR;
+typedef const WCHAR *LPCWSTR;
+typedef WCHAR *PWSTR;
+
+#define _MAX_DRIVE          3
+#define _MAX_FNAME          256
+#define _MAX_DIR            _MAX_FNAME
+#define _MAX_EXT            _MAX_FNAME
+#define _MAX_PATH           260
+
+#define _wcsicmp wcscmp
+#define swprintf_s(x1, ...) swprintf(x1,sizeof(x1), __VA_ARGS__)
+#define wcscpy_s(x1, x2, x3) wcscpy(x1, x3)
+#define swscanf_s(x1, x2, ...) swscanf(x1,x2, __VA_ARGS__)
+
+#define UNREFERENCED_PARAMETER
+
+#endif
 
 #pragma warning(disable : 4619 4616 26812)
 
@@ -295,18 +323,18 @@ const SValue g_pFilters[] =
     { L"FANT",                      TEX_FILTER_FANT },
     { L"BOX",                       TEX_FILTER_BOX },
     { L"TRIANGLE",                  TEX_FILTER_TRIANGLE },
-    { L"POINT_DITHER",              TEX_FILTER_POINT | TEX_FILTER_DITHER },
-    { L"LINEAR_DITHER",             TEX_FILTER_LINEAR | TEX_FILTER_DITHER },
-    { L"CUBIC_DITHER",              TEX_FILTER_CUBIC | TEX_FILTER_DITHER },
-    { L"FANT_DITHER",               TEX_FILTER_FANT | TEX_FILTER_DITHER },
-    { L"BOX_DITHER",                TEX_FILTER_BOX | TEX_FILTER_DITHER },
-    { L"TRIANGLE_DITHER",           TEX_FILTER_TRIANGLE | TEX_FILTER_DITHER },
-    { L"POINT_DITHER_DIFFUSION",    TEX_FILTER_POINT | TEX_FILTER_DITHER_DIFFUSION },
-    { L"LINEAR_DITHER_DIFFUSION",   TEX_FILTER_LINEAR | TEX_FILTER_DITHER_DIFFUSION },
-    { L"CUBIC_DITHER_DIFFUSION",    TEX_FILTER_CUBIC | TEX_FILTER_DITHER_DIFFUSION },
-    { L"FANT_DITHER_DIFFUSION",     TEX_FILTER_FANT | TEX_FILTER_DITHER_DIFFUSION },
-    { L"BOX_DITHER_DIFFUSION",      TEX_FILTER_BOX | TEX_FILTER_DITHER_DIFFUSION },
-    { L"TRIANGLE_DITHER_DIFFUSION", TEX_FILTER_TRIANGLE | TEX_FILTER_DITHER_DIFFUSION },
+    { L"POINT_DITHER",              static_cast<DWORD>(TEX_FILTER_POINT | TEX_FILTER_DITHER) },
+    { L"LINEAR_DITHER",             static_cast<DWORD>(TEX_FILTER_LINEAR | TEX_FILTER_DITHER) },
+    { L"CUBIC_DITHER",              static_cast<DWORD>(TEX_FILTER_CUBIC | TEX_FILTER_DITHER) },
+    { L"FANT_DITHER",               static_cast<DWORD>(TEX_FILTER_FANT | TEX_FILTER_DITHER) },
+    { L"BOX_DITHER",                static_cast<DWORD>(TEX_FILTER_BOX | TEX_FILTER_DITHER) },
+    { L"TRIANGLE_DITHER",           static_cast<DWORD>(TEX_FILTER_TRIANGLE | TEX_FILTER_DITHER) },
+    { L"POINT_DITHER_DIFFUSION",    static_cast<DWORD>(TEX_FILTER_POINT | TEX_FILTER_DITHER_DIFFUSION) },
+    { L"LINEAR_DITHER_DIFFUSION",   static_cast<DWORD>(TEX_FILTER_LINEAR | TEX_FILTER_DITHER_DIFFUSION) },
+    { L"CUBIC_DITHER_DIFFUSION",    static_cast<DWORD>(TEX_FILTER_CUBIC | TEX_FILTER_DITHER_DIFFUSION) },
+    { L"FANT_DITHER_DIFFUSION",     static_cast<DWORD>(TEX_FILTER_FANT | TEX_FILTER_DITHER_DIFFUSION) },
+    { L"BOX_DITHER_DIFFUSION",      static_cast<DWORD>(TEX_FILTER_BOX | TEX_FILTER_DITHER_DIFFUSION) },
+    { L"TRIANGLE_DITHER_DIFFUSION", static_cast<DWORD>(TEX_FILTER_TRIANGLE | TEX_FILTER_DITHER_DIFFUSION) },
     { nullptr,                      TEX_FILTER_DEFAULT }
 };
 
@@ -361,11 +389,13 @@ const SValue g_pExtFileTypes[] =
 
 namespace
 {
+    #ifdef _WIN32
     inline HANDLE safe_handle(HANDLE h) noexcept { return (h == INVALID_HANDLE_VALUE) ? nullptr : h; }
 
     struct find_closer { void operator()(HANDLE h) noexcept { assert(h != INVALID_HANDLE_VALUE); if (h) FindClose(h); } };
 
     using ScopedFindHandle = std::unique_ptr<void, find_closer>;
+    #endif
 
 #ifdef _PREFAST_
 #pragma prefast(disable : 26018, "Only used with static internal arrays")
@@ -399,6 +429,7 @@ namespace
     }
 
 
+    #ifdef _WIN32
     void SearchForFiles(const wchar_t* path, std::list<SConversion>& files, bool recursive)
     {
         // Process files
@@ -472,6 +503,7 @@ namespace
             }
         }
     }
+    #endif
 
 
     void PrintFormat(DXGI_FORMAT Format)
@@ -523,6 +555,7 @@ namespace
     {
         wchar_t version[32] = {};
 
+        #ifdef _WIN32
         wchar_t appName[_MAX_PATH] = {};
         if (GetModuleFileNameW(nullptr, appName, _countof(appName)))
         {
@@ -541,6 +574,7 @@ namespace
                 }
             }
         }
+        #endif
 
         if (!*version || wcscmp(version, L"1.0.0.0") == 0)
         {
@@ -614,7 +648,12 @@ namespace
             return E_OUTOFMEMORY;
 
         wchar_t ext[_MAX_EXT] = {};
+        #ifdef _WIN32
         _wsplitpath_s(fileName, nullptr, 0, nullptr, 0, nullptr, 0, ext, _MAX_EXT);
+        #else
+        std::filesystem::path path(fileName);
+        wcscpy(ext, path.extension().wstring().c_str());
+        #endif
 
         if (_wcsicmp(ext, L".dds") == 0)
         {
@@ -649,6 +688,7 @@ namespace
 
             return S_OK;
         }
+        #ifdef _WIN32
         else if (_wcsicmp(ext, L".tga") == 0)
         {
             return LoadFromTGAFile(fileName, TGA_FLAGS_NONE, &info, *image);
@@ -657,6 +697,7 @@ namespace
         {
             return LoadFromHDRFile(fileName, &info, *image);
         }
+        #endif
 #ifdef USE_OPENEXR
         else if (_wcsicmp(ext, L".exr") == 0)
         {
@@ -665,6 +706,7 @@ namespace
 #endif
         else
         {
+            #ifdef _WIN32
             // WIC shares the same filter values for mode and dither
             static_assert(static_cast<int>(WIC_FLAGS_DITHER) == static_cast<int>(TEX_FILTER_DITHER), "WIC_FLAGS_* & TEX_FILTER_* should match");
             static_assert(static_cast<int>(WIC_FLAGS_DITHER_DIFFUSION) == static_cast<int>(TEX_FILTER_DITHER_DIFFUSION), "WIC_FLAGS_* & TEX_FILTER_* should match");
@@ -674,6 +716,9 @@ namespace
             static_assert(static_cast<int>(WIC_FLAGS_FILTER_FANT) == static_cast<int>(TEX_FILTER_FANT), "WIC_FLAGS_* & TEX_FILTER_* should match");
 
             return LoadFromWICFile(fileName, dwFilter | WIC_FLAGS_ALL_FRAMES, &info, *image);
+            #else
+            return E_INVALIDARG;
+            #endif
         }
     }
 
@@ -696,7 +741,11 @@ namespace
 #endif
 
         default:
+#ifdef _WIN32
             return SaveToWICFile(*image, WIC_FLAGS_NONE, GetWICCodec(static_cast<WICCodecs>(codec)), fileName);
+#else
+            return E_INVALIDARG;
+#endif
         }
     }
 
@@ -3079,6 +3128,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
     DWORD fileType = WIC_CODEC_BMP;
     wchar_t szOutputFile[MAX_PATH] = {};
 
+    #ifdef _WIN32
     // Initialize COM (needed for WIC)
     HRESULT hr = hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(hr))
@@ -3086,6 +3136,9 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
         wprintf(L"Failed to initialize COM (%08X)\n", static_cast<unsigned int>(hr));
         return 1;
     }
+    #else
+    HRESULT hr;
+    #endif
 
     // Process command line
     if (argc < 2)
@@ -3207,7 +3260,12 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                     wcscpy_s(szOutputFile, MAX_PATH, pValue);
 
                     wchar_t ext[_MAX_EXT] = {};
+                    #ifdef _WIN32
                     _wsplitpath_s(szOutputFile, nullptr, 0, nullptr, 0, nullptr, 0, ext, _MAX_EXT);
+                    #else
+                    std::filesystem::path path(szOutputFile);
+                    wcscpy(ext, path.extension().wstring().c_str());
+                    #endif
 
                     fileType = LookupByName(ext, g_pExtFileTypes);
                 }
@@ -3258,6 +3316,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 }
                 break;
 
+            #ifdef _WIN32
             case OPT_FILELIST:
             {
                 std::wifstream inFile(pValue);
@@ -3299,11 +3358,13 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 inFile.close();
             }
             break;
+            #endif
 
             default:
                 break;
             }
         }
+        #ifdef _WIN32
         else if (wcspbrk(pArg, L"?*") != nullptr)
         {
             size_t count = conversion.size();
@@ -3314,6 +3375,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 return 1;
             }
         }
+        #endif
         else
         {
             SConversion conv;
@@ -3383,6 +3445,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 return 1;
             }
 
+            #ifdef _WIN32
             if (dwCommand == CMD_DIFF)
             {
                 if (!*szOutputFile)
@@ -3433,7 +3496,9 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
                 wprintf(L"Difference %ls\n", szOutputFile);
             }
-            else if ((info1.depth == 1
+            else
+            #endif
+            if ((info1.depth == 1
                 && info1.arraySize == 1
                 && info1.mipLevels == 1)
                 || info1.depth != info2.depth
@@ -3673,6 +3738,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
                 wprintf(L"   pixel size = %u (KB)\n\n", sizeInKb);
             }
+            #ifdef _WIN32
             else if (dwCommand == CMD_DUMPDDS)
             {
                 // --- Dump DDS ------------------------------------------------------------
@@ -3774,6 +3840,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                     wprintf(L"\n");
                 }
             }
+            #endif
             else if (dwCommand == CMD_DUMPBC)
             {
                 // --- Dump BC -------------------------------------------------------------
@@ -4016,3 +4083,22 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
     return 0;
 }
+
+#ifdef __linux__
+const wchar_t *GetWC(const char *c)
+{
+    const size_t cSize = strlen(c)+1;
+    wchar_t* wc = new wchar_t[cSize];
+    mbstowcs (wc, c, cSize);
+
+    return wc;
+}
+
+int main(int argc, char* argv[], char *env[]){
+    for(int i=0;i<argc;i++){
+        argv[i] = (char*) GetWC(argv[i]);
+    }
+
+    return wmain(argc,(wchar_t **) argv);
+}
+#endif

@@ -13,7 +13,9 @@
 
 using namespace DirectX;
 using namespace DirectX::PackedVector;
+#ifdef _WIN32
 using Microsoft::WRL::ComPtr;
+#endif
 
 namespace
 {
@@ -4363,6 +4365,7 @@ bool DirectX::_StoreScanlineDither(
 
 namespace
 {
+    #ifdef _WIN32
     //-------------------------------------------------------------------------------------
     // Selection logic for using WIC vs. our own routines
     //-------------------------------------------------------------------------------------
@@ -4572,6 +4575,7 @@ namespace
 
         return S_OK;
     }
+    #endif
 
 
     //-------------------------------------------------------------------------------------
@@ -4856,12 +4860,14 @@ HRESULT DirectX::Convert(
         return E_POINTER;
     }
 
+    #ifdef _WIN32
     WICPixelFormatGUID pfGUID, targetGUID;
     if (UseWICConversion(filter, srcImage.format, format, pfGUID, targetGUID))
     {
         hr = ConvertUsingWIC(srcImage, pfGUID, targetGUID, filter, threshold, *rimage);
     }
     else
+    #endif
     {
         hr = ConvertCustom(srcImage, filter, *rimage, threshold, 0);
     }
@@ -4920,8 +4926,10 @@ HRESULT DirectX::Convert(
         return E_POINTER;
     }
 
+    #ifdef _WIN32
     WICPixelFormatGUID pfGUID, targetGUID;
     bool usewic = !metadata.IsPMAlpha() && UseWICConversion(filter, metadata.format, format, pfGUID, targetGUID);
+    #endif
 
     switch (metadata.dimension)
     {
@@ -4951,11 +4959,13 @@ HRESULT DirectX::Convert(
                 return E_FAIL;
             }
 
+            #ifdef _WIN32
             if (usewic)
             {
                 hr = ConvertUsingWIC(src, pfGUID, targetGUID, filter, threshold, dst);
             }
             else
+            #endif
             {
                 hr = ConvertCustom(src, filter, dst, threshold, 0);
             }
@@ -5004,11 +5014,13 @@ HRESULT DirectX::Convert(
                     return E_FAIL;
                 }
 
+                #ifdef _WIN32
                 if (usewic)
                 {
                     hr = ConvertUsingWIC(src, pfGUID, targetGUID, filter, threshold, dst);
                 }
                 else
+                #endif
                 {
                     hr = ConvertCustom(src, filter, dst, threshold, slice);
                 }

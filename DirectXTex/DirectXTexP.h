@@ -89,7 +89,16 @@
 #define _WIN32_WINNT_WIN10 0x0A00
 #endif
 
+#ifdef _WIN32
 #include <Windows.h>
+
+#include <Ole2.h>
+
+#include <wincodec.h>
+
+#include <wrl\client.h>
+
+#endif
 
 #ifdef _GAMING_XBOX_SCARLETT
 #include <d3d12_xs.h>
@@ -98,9 +107,38 @@
 #elif defined(_XBOX_ONE) && defined(_TITLE)
 #include <d3d12_x.h>
 #include <d3d11_x.h>
-#elif (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
+#elif defined(_WIN32) && (_WIN32_WINNT >= _WIN32_WINNT_WIN10)
 #include <d3d12.h>
 #include <d3d11_4.h>
+#elif defined(__linux__)
+
+#include <codecvt>
+#include <cstring>
+#include <functional>
+#include <filesystem>
+#include <fstream>
+
+#define COM_NO_WINDOWS_H
+#include <wine/windows/dxgiformat.h>
+
+typedef struct _GUID {
+  unsigned long Data1;
+  unsigned short Data2;
+  unsigned short Data3;
+  unsigned char Data4[8];
+} GUID;
+
+#define UNREFERENCED_PARAMETER
+
+#define ARRAYSIZE(a)                                                           \
+  ((sizeof(a) / sizeof(*(a))) /                                                \
+   static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
+
+#define LARGE_INTEGER long long
+#include <wine/windows/winerror.h>
+
+// #include <wine/windows/d3d12.h>
+// #include <wine/windows/d3d11_4.h>
 #else
 #include <d3d11_1.h>
 #endif
@@ -120,13 +158,7 @@
 #include <stdlib.h>
 #include <search.h>
 
-#include <Ole2.h>
-
 #include "DirectXTex.h"
-
-#include <wincodec.h>
-
-#include <wrl\client.h>
 
 #include "scoped.h"
 
@@ -155,6 +187,7 @@ namespace DirectX
 
     TEX_FILTER_FLAGS __cdecl _CheckWICColorSpace(_In_ const GUID& sourceGUID, _In_ const GUID& targetGUID) noexcept;
 
+    #ifdef _WIN32
     inline WICBitmapDitherType __cdecl _GetWICDither(_In_ TEX_FILTER_FLAGS flags) noexcept
     {
         static_assert(TEX_FILTER_DITHER == 0x10000, "TEX_FILTER_DITHER* flag values don't match mask");
@@ -234,6 +267,7 @@ namespace DirectX
             return WICBitmapInterpolationModeFant;
         }
     }
+    #endif
 
 
     //---------------------------------------------------------------------------------

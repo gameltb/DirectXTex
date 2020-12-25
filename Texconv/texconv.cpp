@@ -27,6 +27,7 @@
 #include <memory>
 #include <list>
 
+#ifdef _WIN32
 #include <wrl\client.h>
 
 #include <d3d11.h>
@@ -34,6 +35,35 @@
 #include <dxgiformat.h>
 
 #include <wincodec.h>
+#endif
+
+#if defined (__linux__)
+#include <cstring>
+#include <filesystem>
+
+#include <wine/windows/winerror.h>
+
+#define MAX_PATH        260
+typedef wchar_t        WCHAR;
+typedef const WCHAR *LPCWSTR;
+typedef WCHAR *PWSTR;
+typedef __int64_t DWORD64;
+
+#define _MAX_DRIVE          3
+#define _MAX_FNAME          256
+#define _MAX_DIR            _MAX_FNAME
+#define _MAX_EXT            _MAX_FNAME
+#define _MAX_PATH           260
+
+#define _wcsicmp wcscmp
+#define swprintf_s(x1, ...) swprintf(x1,sizeof(x1), __VA_ARGS__)
+#define wcscpy_s(x1, x2, x3) wcscpy(x1, x3)
+#define wcscat_s(x1, x2, x3) wcscat(x1, x3)
+#define swscanf_s(x1, x2, ...) swscanf(x1,x2, __VA_ARGS__)
+
+#define UNREFERENCED_PARAMETER
+
+#endif
 
 #pragma warning(disable : 4619 4616 26812)
 
@@ -51,7 +81,9 @@
 
 using namespace DirectX;
 using namespace DirectX::PackedVector;
+#ifdef _WIN32
 using Microsoft::WRL::ComPtr;
+#endif
 
 namespace
 {
@@ -367,18 +399,18 @@ namespace
         { L"FANT",                      TEX_FILTER_FANT },
         { L"BOX",                       TEX_FILTER_BOX },
         { L"TRIANGLE",                  TEX_FILTER_TRIANGLE },
-        { L"POINT_DITHER",              TEX_FILTER_POINT | TEX_FILTER_DITHER },
-        { L"LINEAR_DITHER",             TEX_FILTER_LINEAR | TEX_FILTER_DITHER },
-        { L"CUBIC_DITHER",              TEX_FILTER_CUBIC | TEX_FILTER_DITHER },
-        { L"FANT_DITHER",               TEX_FILTER_FANT | TEX_FILTER_DITHER },
-        { L"BOX_DITHER",                TEX_FILTER_BOX | TEX_FILTER_DITHER },
-        { L"TRIANGLE_DITHER",           TEX_FILTER_TRIANGLE | TEX_FILTER_DITHER },
-        { L"POINT_DITHER_DIFFUSION",    TEX_FILTER_POINT | TEX_FILTER_DITHER_DIFFUSION },
-        { L"LINEAR_DITHER_DIFFUSION",   TEX_FILTER_LINEAR | TEX_FILTER_DITHER_DIFFUSION },
-        { L"CUBIC_DITHER_DIFFUSION",    TEX_FILTER_CUBIC | TEX_FILTER_DITHER_DIFFUSION },
-        { L"FANT_DITHER_DIFFUSION",     TEX_FILTER_FANT | TEX_FILTER_DITHER_DIFFUSION },
-        { L"BOX_DITHER_DIFFUSION",      TEX_FILTER_BOX | TEX_FILTER_DITHER_DIFFUSION },
-        { L"TRIANGLE_DITHER_DIFFUSION", TEX_FILTER_TRIANGLE | TEX_FILTER_DITHER_DIFFUSION },
+        { L"POINT_DITHER",              static_cast<DWORD>(TEX_FILTER_POINT | TEX_FILTER_DITHER) },
+        { L"LINEAR_DITHER",             static_cast<DWORD>(TEX_FILTER_LINEAR | TEX_FILTER_DITHER) },
+        { L"CUBIC_DITHER",              static_cast<DWORD>(TEX_FILTER_CUBIC | TEX_FILTER_DITHER) },
+        { L"FANT_DITHER",               static_cast<DWORD>(TEX_FILTER_FANT | TEX_FILTER_DITHER) },
+        { L"BOX_DITHER",                static_cast<DWORD>(TEX_FILTER_BOX | TEX_FILTER_DITHER) },
+        { L"TRIANGLE_DITHER",           static_cast<DWORD>(TEX_FILTER_TRIANGLE | TEX_FILTER_DITHER) },
+        { L"POINT_DITHER_DIFFUSION",    static_cast<DWORD>(TEX_FILTER_POINT | TEX_FILTER_DITHER_DIFFUSION) },
+        { L"LINEAR_DITHER_DIFFUSION",   static_cast<DWORD>(TEX_FILTER_LINEAR | TEX_FILTER_DITHER_DIFFUSION) },
+        { L"CUBIC_DITHER_DIFFUSION",    static_cast<DWORD>(TEX_FILTER_CUBIC | TEX_FILTER_DITHER_DIFFUSION) },
+        { L"FANT_DITHER_DIFFUSION",     static_cast<DWORD>(TEX_FILTER_FANT | TEX_FILTER_DITHER_DIFFUSION) },
+        { L"BOX_DITHER_DIFFUSION",      static_cast<DWORD>(TEX_FILTER_BOX | TEX_FILTER_DITHER_DIFFUSION) },
+        { L"TRIANGLE_DITHER_DIFFUSION", static_cast<DWORD>(TEX_FILTER_TRIANGLE | TEX_FILTER_DITHER_DIFFUSION) },
         { nullptr,                      TEX_FILTER_DEFAULT                              }
     };
 
@@ -478,11 +510,13 @@ HRESULT __cdecl SaveToPortablePixMapHDR(
 
 namespace
 {
+    #ifdef _WIN32
     inline HANDLE safe_handle(HANDLE h) noexcept { return (h == INVALID_HANDLE_VALUE) ? nullptr : h; }
 
     struct find_closer { void operator()(HANDLE h) noexcept { assert(h != INVALID_HANDLE_VALUE); if (h) FindClose(h); } };
 
     using ScopedFindHandle = std::unique_ptr<void, find_closer>;
+    #endif
 
     inline static bool ispow2(size_t x)
     {
@@ -519,6 +553,7 @@ namespace
         return L"";
     }
 
+    #ifdef _WIN32
     void SearchForFiles(const wchar_t* path, std::list<SConversion>& files, bool recursive)
     {
         // Process files
@@ -592,6 +627,7 @@ namespace
             }
         }
     }
+    #endif
 
     void PrintFormat(DXGI_FORMAT Format)
     {
@@ -699,6 +735,7 @@ namespace
     {
         wchar_t version[32] = {};
 
+        #ifdef _WIN32
         wchar_t appName[_MAX_PATH] = {};
         if (GetModuleFileNameW(nullptr, appName, _countof(appName)))
         {
@@ -717,6 +754,7 @@ namespace
                 }
             }
         }
+        #endif
 
         if (!*version || wcscmp(version, L"1.0.0.0") == 0)
         {
@@ -731,6 +769,7 @@ namespace
         wprintf(L"\n");
     }
 
+    #ifdef _WIN32
     _Success_(return != false)
         bool GetDXGIFactory(_Outptr_ IDXGIFactory1** pFactory)
     {
@@ -756,6 +795,7 @@ namespace
 
         return SUCCEEDED(s_CreateDXGIFactory1(IID_PPV_ARGS(pFactory)));
     }
+    #endif
 
     void PrintUsage()
     {
@@ -849,6 +889,7 @@ namespace
         wprintf(L"\n   <feature-level>: ");
         PrintList(13, g_pFeatureLevels);
 
+        #ifdef _WIN32
         ComPtr<IDXGIFactory1> dxgiFactory;
         if (GetDXGIFactory(dxgiFactory.GetAddressOf()))
         {
@@ -866,8 +907,10 @@ namespace
                 }
             }
         }
+        #endif
     }
 
+    #ifdef _WIN32
     _Success_(return != false)
         bool CreateDevice(int adapter, _Outptr_ ID3D11Device** pDevice)
     {
@@ -964,6 +1007,7 @@ namespace
         else
             return false;
     }
+    #endif
 
     void FitPowerOf2(size_t origx, size_t origy, size_t& targetx, size_t& targety, size_t maxsize)
     {
@@ -1080,6 +1124,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
     wchar_t szSuffix[MAX_PATH] = {};
     wchar_t szOutputDir[MAX_PATH] = {};
 
+    #ifdef _WIN32
     // Initialize COM (needed for WIC)
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(hr))
@@ -1087,6 +1132,9 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
         wprintf(L"Failed to initialize COM (%08X)\n", static_cast<unsigned int>(hr));
         return 1;
     }
+    #else
+    HRESULT hr;
+    #endif
 
     // Process command line
     DWORD64 dwOptions = 0;
@@ -1533,6 +1581,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 }
                 break;
 
+            #ifdef _WIN32
             case OPT_FILELIST:
             {
                 std::wifstream inFile(pValue);
@@ -1574,6 +1623,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 inFile.close();
             }
             break;
+            #endif
 
             case OPT_PAPER_WHITE_NITS:
                 if (swscanf_s(pValue, L"%f", &paperWhiteNits) != 1)
@@ -1604,6 +1654,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 break;
             }
         }
+        #ifdef _WIN32
         else if (wcspbrk(pArg, L"?*") != nullptr)
         {
             size_t count = conversion.size();
@@ -1614,6 +1665,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 return 1;
             }
         }
+        #endif
         else
         {
             SConversion conv;
@@ -1660,6 +1712,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
         mipLevels = 1;
     }
 
+    #ifdef _WIN32
     LARGE_INTEGER qpcFreq;
     if (!QueryPerformanceFrequency(&qpcFreq))
     {
@@ -1671,13 +1724,16 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
     {
         qpcStart.QuadPart = 0;
     }
+    #endif
 
     // Convert images
     bool sizewarn = false;
     bool nonpow2warn = false;
     bool non4bc = false;
     bool preserveAlphaCoverage = false;
+    #ifdef _WIN32
     ComPtr<ID3D11Device> pDevice;
+    #endif
 
     for (auto pConv = conversion.begin(); pConv != conversion.end(); ++pConv)
     {
@@ -1690,7 +1746,13 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
         wchar_t ext[_MAX_EXT] = {};
         wchar_t fname[_MAX_FNAME] = {};
+        #ifdef _WIN32
         _wsplitpath_s(pConv->szSrc, nullptr, 0, nullptr, 0, fname, _MAX_FNAME, ext, _MAX_EXT);
+        #else
+        std::filesystem::path path(pConv->szSrc);
+        wcscpy_s(fname, _MAX_FNAME, path.stem().wstring().c_str());
+        wcscpy_s(ext, _MAX_EXT, path.extension().wstring().c_str());
+        #endif
 
         TexMetadata info;
         std::unique_ptr<ScratchImage> image(new (std::nothrow) ScratchImage);
@@ -1738,6 +1800,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 image->OverrideFormat(info.format);
             }
         }
+        #ifdef _WIN32
         else if (_wcsicmp(ext, L".bmp") == 0)
         {
             hr = LoadFromBMPEx(pConv->szSrc, WIC_FLAGS_NONE | dwFilter, &info, *image);
@@ -1783,6 +1846,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 continue;
             }
         }
+        #endif
 #ifdef USE_OPENEXR
         else if (_wcsicmp(ext, L".exr") == 0)
         {
@@ -1796,6 +1860,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 #endif
         else
         {
+            #ifdef _WIN32
             // WIC shares the same filter values for mode and dither
             static_assert(static_cast<int>(WIC_FLAGS_DITHER) == static_cast<int>(TEX_FILTER_DITHER), "WIC_FLAGS_* & TEX_FILTER_* should match");
             static_assert(static_cast<int>(WIC_FLAGS_DITHER_DIFFUSION) == static_cast<int>(TEX_FILTER_DITHER_DIFFUSION), "WIC_FLAGS_* & TEX_FILTER_* should match");
@@ -1809,6 +1874,9 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 wicFlags |= WIC_FLAGS_ALL_FRAMES;
 
             hr = LoadFromWICFile(pConv->szSrc, wicFlags, &info, *image);
+            #else
+            hr = E_INVALIDARG;
+            #endif
             if (FAILED(hr))
             {
                 wprintf(L" FAILED (%x)\n", static_cast<unsigned int>(hr));
@@ -2039,12 +2107,16 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
             assert(dwFlags != 0);
 
+            #ifdef _WIN32
             hr = FlipRotate(image->GetImages(), image->GetImageCount(), image->GetMetadata(), dwFlags, *timage);
             if (FAILED(hr))
             {
                 wprintf(L" FAILED [fliprotate] (%x)\n", static_cast<unsigned int>(hr));
                 return 1;
             }
+            #else
+            return 1;
+            #endif
 
             auto& tinfo = timage->GetMetadata();
 
@@ -2978,7 +3050,9 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
                             if (!(dwOptions & (DWORD64(1) << OPT_NOGPU)))
                             {
+                                #ifdef _WIN32
                                 if (!CreateDevice(adapter, pDevice.GetAddressOf()))
+                                #endif
                                     wprintf(L"\nWARNING: DirectCompute is not available, using BC6H / BC7 CPU codec\n");
                             }
                             else
@@ -3006,11 +3080,13 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                     non4bc = true;
                 }
 
+                #ifdef _WIN32
                 if (bc6hbc7 && pDevice)
                 {
                     hr = Compress(pDevice.Get(), img, nimg, info, tformat, dwCompress | dwSRGB, alphaWeight, *timage);
                 }
                 else
+                #endif
                 {
                     hr = Compress(img, nimg, info, tformat, cflags | dwSRGB, alphaThreshold, *timage);
                 }
@@ -3093,15 +3169,18 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
             wcscat_s(pConv->szDest, MAX_PATH, szSuffix);
 
+            #ifdef _WIN32
             if (dwOptions & (DWORD64(1) << OPT_TOLOWER))
             {
                 (void)_wcslwr_s(pConv->szDest);
             }
+            #endif
 
             // Write texture
             wprintf(L"writing %ls", pConv->szDest);
             fflush(stdout);
 
+            #ifdef _WIN32
             if (~dwOptions & (DWORD64(1) << OPT_OVERWRITE))
             {
                 if (GetFileAttributesW(pConv->szDest) != INVALID_FILE_ATTRIBUTES)
@@ -3110,6 +3189,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                     continue;
                 }
             }
+            #endif
 
             switch (FileType)
             {
@@ -3129,6 +3209,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 break;
             }
 
+            #ifdef _WIN32
             case CODEC_TGA:
                 hr = SaveToTGAFile(img[0], TGA_FLAGS_NONE, pConv->szDest, (dwOptions & (DWORD64(1) << OPT_TGA20)) ? &info : nullptr);
                 break;
@@ -3144,6 +3225,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
             case CODEC_PFM:
                 hr = SaveToPortablePixMapHDR(img[0], pConv->szDest);
                 break;
+            #endif
 
 #ifdef USE_OPENEXR
             case CODEC_EXR:
@@ -3153,6 +3235,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
 
             default:
             {
+                #ifdef _WIN32
                 WICCodecs codec = (FileType == CODEC_HDP || FileType == CODEC_JXR) ? WIC_CODEC_WMP : static_cast<WICCodecs>(FileType);
                 size_t nimages = (dwOptions & (DWORD64(1) << OPT_WIC_MULTIFRAME)) ? nimg : 1;
                 hr = SaveToWICFile(img, nimages, WIC_FLAGS_NONE, GetWICCodec(codec), pConv->szDest, nullptr,
@@ -3217,6 +3300,9 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                         break;
                         }
                     });
+                    #else
+                    hr = E_INVALIDARG;
+                    #endif
             }
             break;
             }
@@ -3244,6 +3330,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
     if (non4bc)
         wprintf(L"\nWARNING: Direct3D requires BC image to be multiple of 4 in width & height\n");
 
+    #ifdef _WIN32
     if (dwOptions & (DWORD64(1) << OPT_TIMING))
     {
         LARGE_INTEGER qpcEnd;
@@ -3253,6 +3340,26 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
             wprintf(L"\n Processing time: %f seconds\n", double(delta) / double(qpcFreq.QuadPart));
         }
     }
+    #endif
 
     return 0;
 }
+
+#ifdef __linux__
+const wchar_t *GetWC(const char *c)
+{
+    const size_t cSize = strlen(c)+1;
+    auto* wc = new wchar_t[cSize];
+    mbstowcs (wc, c, cSize);
+
+    return wc;
+}
+
+int main(int argc, char* argv[], char *env[]){
+    for(int i=0;i<argc;i++){
+        argv[i] = (char*) GetWC(argv[i]);
+    }
+
+    return wmain(argc,(wchar_t **) argv);
+}
+#endif
