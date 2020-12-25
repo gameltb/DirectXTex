@@ -121,6 +121,10 @@
 #define COM_NO_WINDOWS_H
 #include <wine/windows/dxgiformat.h>
 
+#define strncpy_s(x1, x2, x3) strncpy(x1, x2, x3)
+#define sscanf_s(x1, x2, ...) sscanf(x1,x2, __VA_ARGS__)
+#define sprintf_s(x1, x2, ...) sprintf(x1, x2, __VA_ARGS__)
+
 typedef struct _GUID {
   unsigned long Data1;
   unsigned short Data2;

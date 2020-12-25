@@ -60,7 +60,7 @@ set(LIBRARY_SOURCES
     DirectXTex/DirectXTexCompress.cpp
     DirectXTex/DirectXTexConvert.cpp
     DirectXTex/DirectXTexDDS.cpp
-    # DirectXTex/DirectXTexHDR.cpp
+    DirectXTex/DirectXTexHDR.cpp
     DirectXTex/DirectXTexImage.cpp
     DirectXTex/DirectXTexMipmaps.cpp
     DirectXTex/DirectXTexMisc.cpp

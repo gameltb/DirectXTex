@@ -735,7 +735,11 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
     {
         PWSTR pArg = argv[iArg];
 
+        #ifdef _WIN32
         if (('-' == pArg[0]) || ('/' == pArg[0]))
+        #else
+        if (('-' == pArg[0]))
+        #endif
         {
             pArg++;
             PWSTR pValue;

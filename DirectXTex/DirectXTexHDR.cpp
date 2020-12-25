@@ -580,6 +580,7 @@ HRESULT DirectX::GetMetadataFromHDRFile(const wchar_t* szFile, TexMetadata& meta
     if (!szFile)
         return E_INVALIDARG;
 
+#ifdef _WIN32
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
     ScopedHandle hFile(safe_handle(CreateFile2(szFile, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, nullptr)));
 #else
@@ -609,14 +610,45 @@ HRESULT DirectX::GetMetadataFromHDRFile(const wchar_t* szFile, TexMetadata& meta
     {
         return E_FAIL;
     }
+#else
+    std::filesystem::path path(szFile);
+    std::ifstream hFile(path, std::ios::in|std::ios::binary);
+
+    if (!hFile.is_open())
+    {
+        return E_FAIL;
+    }
+
+    auto size = std::filesystem::file_size(path);
+
+    // File is too big for 32-bit allocation, so reject read (4 GB should be plenty large enough for a valid HDR file)
+    if ((size & 0xffffffff00000000) > 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+
+    // Need at least enough data to fill the standard header to be a valid HDR
+    if (size < sizeof(g_Signature))
+    {
+        return E_FAIL;
+    }
+#endif
 
     // Read the first part of the file to find the header
     uint8_t header[8192] = {};
     DWORD bytesRead = 0;
+#ifdef _WIN32
     if (!ReadFile(hFile.get(), header, std::min<DWORD>(sizeof(header), fileInfo.EndOfFile.LowPart), &bytesRead, nullptr))
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
+#else
+    hFile.read(reinterpret_cast<char *>(header), std::min<DWORD>(sizeof(header), size));
+    bytesRead = hFile.gcount();
+    if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+        return E_FAIL;
+    }
+#endif
 
     size_t offset;
     float exposure;
@@ -852,6 +884,7 @@ HRESULT DirectX::LoadFromHDRFile(const wchar_t* szFile, TexMetadata* metadata, S
 
     image.Release();
 
+#ifdef _WIN32
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
     ScopedHandle hFile(safe_handle(CreateFile2(szFile, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, nullptr)));
 #else
@@ -884,12 +917,40 @@ HRESULT DirectX::LoadFromHDRFile(const wchar_t* szFile, TexMetadata* metadata, S
 
     // Read file
     std::unique_ptr<uint8_t[]> temp(new (std::nothrow) uint8_t[fileInfo.EndOfFile.LowPart]);
+#else
+    std::filesystem::path path(szFile);
+    std::ifstream hFile(path, std::ios::in|std::ios::binary);
+
+    if (!hFile.is_open())
+    {
+        return E_FAIL;
+    }
+
+    auto size = std::filesystem::file_size(path);
+
+    // File is too big for 32-bit allocation, so reject read (4 GB should be plenty large enough for a valid DDS file)
+    if ((size & 0xffffffff00000000) > 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+
+    // Need at least enough data to fill the standard header and magic number to be a valid DDS
+    if (size < sizeof(g_Signature))
+    {
+        return E_FAIL;
+    }
+
+    // Read file
+    std::unique_ptr<uint8_t[]> temp(new (std::nothrow) uint8_t[size]);
+#endif
+
     if (!temp)
     {
         return E_OUTOFMEMORY;
     }
 
     DWORD bytesRead = 0;
+#ifdef _WIN32
     if (!ReadFile(hFile.get(), temp.get(), fileInfo.EndOfFile.LowPart, &bytesRead, nullptr))
     {
         return HRESULT_FROM_WIN32(GetLastError());
@@ -901,6 +962,21 @@ HRESULT DirectX::LoadFromHDRFile(const wchar_t* szFile, TexMetadata* metadata, S
     }
 
     return LoadFromHDRMemory(temp.get(), fileInfo.EndOfFile.LowPart, metadata, image);
+#else
+    hFile.read(reinterpret_cast<char *>(temp.get()), size);
+    bytesRead = hFile.gcount();
+    if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+        return E_FAIL;
+    }
+
+    if (bytesRead != size)
+    {
+        return E_FAIL;
+    }
+
+    return LoadFromHDRMemory(temp.get(), size, metadata, image);
+#endif
+
 }
 
 
@@ -1047,6 +1123,7 @@ HRESULT DirectX::SaveToHDRFile(const Image& image, const wchar_t* szFile) noexce
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
+#ifdef _WIN32
     // Create file and write header
 #if (_WIN32_WINNT >= _WIN32_WINNT_WIN8)
     ScopedHandle hFile(safe_handle(CreateFile2(szFile, GENERIC_WRITE, 0, CREATE_ALWAYS, nullptr)));
@@ -1059,6 +1136,15 @@ HRESULT DirectX::SaveToHDRFile(const Image& image, const wchar_t* szFile) noexce
     }
 
     auto_delete_file delonfail(hFile.get());
+#else
+    std::filesystem::path path(szFile);
+    std::ofstream hFile(path, std::ios::out|std::ios::binary);
+
+    if (!hFile.is_open())
+    {
+        return E_FAIL;
+    }
+#endif
 
     uint64_t pitch = uint64_t(image.width) * 4u;
     uint64_t slicePitch = uint64_t(image.height) * pitch;
@@ -1080,10 +1166,18 @@ HRESULT DirectX::SaveToHDRFile(const Image& image, const wchar_t* szFile) noexce
         // Write blob
         auto bytesToWrite = static_cast<const DWORD>(blob.GetBufferSize());
         DWORD bytesWritten;
+        #ifdef _WIN32
         if (!WriteFile(hFile.get(), blob.GetBufferPointer(), bytesToWrite, &bytesWritten, nullptr))
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
+        #else
+        hFile.write(reinterpret_cast<const char *>(blob.GetBufferPointer()), static_cast<DWORD>(bytesToWrite));
+        bytesWritten = bytesToWrite;
+        if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+            return E_FAIL;
+        }
+        #endif
 
         if (bytesWritten != bytesToWrite)
         {
@@ -1106,10 +1200,18 @@ HRESULT DirectX::SaveToHDRFile(const Image& image, const wchar_t* szFile) noexce
         auto headerLen = static_cast<DWORD>(strlen(header));
 
         DWORD bytesWritten;
+        #ifdef _WIN32
         if (!WriteFile(hFile.get(), header, headerLen, &bytesWritten, nullptr))
         {
             return HRESULT_FROM_WIN32(GetLastError());
         }
+        #else
+        hFile.write(reinterpret_cast<const char *>(header), static_cast<DWORD>(headerLen));
+        bytesWritten = headerLen;
+        if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+            return E_FAIL;
+        }
+        #endif
 
         if (bytesWritten != headerLen)
             return E_FAIL;
@@ -1152,20 +1254,36 @@ HRESULT DirectX::SaveToHDRFile(const Image& image, const wchar_t* szFile) noexce
                 if (encSize > UINT32_MAX)
                     return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
 
+                #ifdef _WIN32
                 if (!WriteFile(hFile.get(), enc, static_cast<DWORD>(encSize), &bytesWritten, nullptr))
                 {
                     return HRESULT_FROM_WIN32(GetLastError());
                 }
+                #else
+                hFile.write(reinterpret_cast<const char *>(enc), static_cast<DWORD>(encSize));
+                bytesWritten = encSize;
+                if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+                    return E_FAIL;
+                }
+                #endif
 
                 if (bytesWritten != encSize)
                     return E_FAIL;
             }
             else
             {
+                #ifdef _WIN32
                 if (!WriteFile(hFile.get(), rgbe, static_cast<DWORD>(rowPitch), &bytesWritten, nullptr))
                 {
                     return HRESULT_FROM_WIN32(GetLastError());
                 }
+                #else
+                hFile.write(reinterpret_cast<const char *>(rgbe), static_cast<DWORD>(rowPitch));
+                bytesWritten = rowPitch;
+                if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+                    return E_FAIL;
+                }
+                #endif
 
                 if (bytesWritten != rowPitch)
                     return E_FAIL;
@@ -1174,7 +1292,9 @@ HRESULT DirectX::SaveToHDRFile(const Image& image, const wchar_t* szFile) noexce
 #endif
     }
 
+#ifdef _WIN32
     delonfail.clear();
+#endif
 
     return S_OK;
 }

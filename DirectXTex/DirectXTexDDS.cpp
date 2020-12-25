@@ -1606,7 +1606,27 @@ HRESULT DirectX::GetMetadataFromDDSFile(
         return E_FAIL;
     }
 #else
+    std::filesystem::path path(szFile);
+    std::ifstream hFile(path, std::ios::in|std::ios::binary);
 
+    if (!hFile.is_open())
+    {
+        return E_FAIL;
+    }
+
+    auto size = std::filesystem::file_size(path);
+
+    // File is too big for 32-bit allocation, so reject read (4 GB should be plenty large enough for a valid DDS file)
+    if ((size & 0xffffffff00000000) > 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+
+    // Need at least enough data to fill the standard header and magic number to be a valid DDS
+    if (size < (sizeof(DDS_HEADER) + sizeof(uint32_t)))
+    {
+        return E_FAIL;
+    }
 #endif
 
     // Read the header in (including extended header if present)
@@ -1621,7 +1641,11 @@ HRESULT DirectX::GetMetadataFromDDSFile(
         return HRESULT_FROM_WIN32(GetLastError());
     }
 #else
-
+    hFile.read(reinterpret_cast<char *>(header), MAX_HEADER_SIZE);
+    bytesRead = hFile.gcount();
+    if ((hFile.rdstate() & std::ofstream::failbit ) != 0){
+        return E_FAIL;
+    }
 #endif
 
     uint32_t convFlags = 0;

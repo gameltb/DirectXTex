@@ -1144,7 +1144,11 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
     {
         PWSTR pArg = argv[iArg];
 
+        #ifdef _WIN32
         if (('-' == pArg[0]) || ('/' == pArg[0]))
+        #else
+        if (('-' == pArg[0]))
+        #endif
         {
             pArg++;
             PWSTR pValue;
@@ -1819,6 +1823,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 continue;
             }
         }
+        #endif
         else if (_wcsicmp(ext, L".hdr") == 0)
         {
             hr = LoadFromHDRFile(pConv->szSrc, &info, *image);
@@ -1828,6 +1833,7 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
                 continue;
             }
         }
+        #ifdef _WIN32
         else if (_wcsicmp(ext, L".ppm") == 0)
         {
             hr = LoadFromPortablePixMap(pConv->szSrc, &info, *image);
@@ -3213,11 +3219,13 @@ int __cdecl wmain(_In_ int argc, _In_z_count_(argc) wchar_t* argv[])
             case CODEC_TGA:
                 hr = SaveToTGAFile(img[0], TGA_FLAGS_NONE, pConv->szDest, (dwOptions & (DWORD64(1) << OPT_TGA20)) ? &info : nullptr);
                 break;
+            #endif
 
             case CODEC_HDR:
                 hr = SaveToHDRFile(img[0], pConv->szDest);
                 break;
 
+            #ifdef _WIN32
             case CODEC_PPM:
                 hr = SaveToPortablePixMap(img[0], pConv->szDest);
                 break;
