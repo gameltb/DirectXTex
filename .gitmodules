@@ -1,0 +1,6 @@
+[submodule "DirectXMath"]
+	path = DirectXMath
+	url = https://github.com/microsoft/DirectXMath
+[submodule "DirectX-Headers"]
+	path = DirectX-Headers
+	url = https://github.com/microsoft/DirectX-Headers

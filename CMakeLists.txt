@@ -139,11 +139,15 @@ if(MSVC)
     string(REPLACE "/GR " "/GR- " CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 endif()
 
-if ((NOT WIN32) OR VCPKG_TOOLCHAIN)
+if ((NOT WIN32) AND VCPKG_TOOLCHAIN)
     message("INFO: Using VCPKG for DirectX-Headers and DirectXMath.")
     find_package(directx-headers CONFIG REQUIRED)
     find_package(directxmath CONFIG REQUIRED)
     target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectX-Headers Microsoft::DirectXMath)
+else()
+    add_subdirectory(DirectX-Headers)
+    add_subdirectory(DirectXMath)
+    target_link_libraries(${PROJECT_NAME} PRIVATE DirectX-Headers DirectXMath)
 endif()
 
 #--- Package
@@ -213,6 +217,27 @@ if(BUILD_TOOLS AND WIN32 AND (NOT WINDOWS_STORE))
     target_link_libraries(texconv Microsoft::DirectXMath)
     target_link_libraries(texdiag Microsoft::DirectXMath)
   endif()
+endif()
+
+if(BUILD_TOOLS AND (NOT WIN32))
+  add_executable(texconv
+  Texconv/texconv.cpp
+  # Texconv/ExtendedBMP.cpp
+  # Texconv/PortablePixMap.cpp)
+  )
+  target_link_libraries(texconv ${PROJECT_NAME} DirectXMath DirectX-Headers)
+  source_group(texconv REGULAR_EXPRESSION Texconv/*.*)
+
+  if(ENABLE_OPENEXR_SUPPORT)
+    # target_link_libraries(texassemble ${OPENEXR_ILMIMF_LIBRARY})
+    target_link_libraries(texconv ${OPENEXR_ILMIMF_LIBRARY})
+    # target_link_libraries(texdiag ${OPENEXR_ILMIMF_LIBRARY})
+
+    # target_compile_options(texassemble PRIVATE -DUSE_OPENEXR)
+    target_compile_options(texconv PRIVATE -DUSE_OPENEXR)
+    # target_compile_options(texdiag PRIVATE -DUSE_OPENEXR)
+  endif()
+
 endif()
 
 if(MSVC)

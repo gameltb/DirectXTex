@@ -801,7 +801,6 @@ namespace DirectX
 
     //---------------------------------------------------------------------------------
     // WIC utility code
-#ifdef WIN32
     enum WICCodecs
     {
         WIC_CODEC_BMP = 1,          // Windows Bitmap (.bmp)
@@ -813,6 +812,7 @@ namespace DirectX
         WIC_CODEC_ICO,              // Windows Icon (.ico)
     };
 
+#ifdef WIN32
     REFGUID __cdecl GetWICCodec(_In_ WICCodecs codec) noexcept;
 
     IWICImagingFactory* __cdecl GetWICFactory(bool& iswic2) noexcept;
